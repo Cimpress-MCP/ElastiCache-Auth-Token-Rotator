@@ -2,6 +2,10 @@
 
 ## What It Is
 
+The Auth Token Rotator is an AWS Secrets Manager [Lambda Function Rotator][] intended to be used with AWS Secrets Manager and AWS ElastiCache. Secrets Manager can use rotators implemented as Lambda Functions to securely and automatically rotate secret configuration values.
+
+This rotator can only be used with ElastiCache instances created as Replication Groups (`AWS::ElastiCache::ReplicationGroup`) because those created as plain cache clusters (`AWS::ElastiCache::ReplicationGroup`) do not support user-specified auth tokens.
+
 [Lambda Function Rotator]: https://docs.aws.amazon.com/secretsmanager/latest/userguide/rotating-secrets.html
 
 ## Why You Want It
