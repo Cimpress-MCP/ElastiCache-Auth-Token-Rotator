@@ -1,0 +1,20 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.git/": true,
+      "**/.DS_Store": true,
+      ".aws-sam/": true,
+      "*.code-workspace": true,
+      ".editorconfig": true,
+      ".gitignore": true,
+      ".gitattributes": true,
+      ".gitlab-ci.yml": true,
+      ".vscode/": true
+    }
+  }
+}

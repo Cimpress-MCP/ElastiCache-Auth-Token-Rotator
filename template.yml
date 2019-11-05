@@ -1,0 +1,91 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Transform: AWS::Serverless-2016-10-31
+
+Description: An Elasticache auth token rotator for the Cimpress Mass Customization Platform.
+
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: platform-elasticache-rotator
+    Description: >-
+      A Secrets Manager rotation Lambda Function which can rotate the auth token for ElastiCache replication groups.
+    Author: Christopher Osborn
+    SpdxLicenseId: Apache-2.0
+    LicenseUrl: ./LICENSE
+    ReadmeUrl: ./README.md
+    Labels:
+    - cimpress
+    - caching
+    - redis
+    - elasticache
+    - replication-group
+    - rotate
+    - rotation
+    - rotator
+    - auth-token
+    HomePageUrl: https://github.com/Cimpress-MCP/Platform-ElastiCache-Rotator
+    SemanticVersion: 0.0.1
+    SourceCodeUrl: https://github.com/Cimpress-MCP/Platform-ElastiCache-Rotator
+
+Parameters:
+  Endpoint:
+    Type: String
+    Description: The Secrets Manager endpoint to hit.
+  FunctionName:
+    Type: String
+    Description: The name of the Lambda Function.
+  VpcSubnetIds:
+    Type: CommaDelimitedList
+    Description: A list of VPC subnet IDs.
+  VpcSecurityGroupIds:
+    Type: CommaDelimitedList
+    Description: A list of VPC security group IDs.
+
+Globals:
+  Function:
+    Runtime: python3.7
+    Timeout: 30
+    Environment:
+      Variables:
+        SECRETS_MANAGER_ENDPOINT: !Ref Endpoint
+
+Resources:
+  SecretsManagerAuthTokenRotation:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Ref FunctionName
+      Description: Conducts an AWS Secrets Manager rotation for ElastiCache Replication Group auth token
+      CodeUri: ./rotator/
+      Handler: rotator.handle
+      Policies:
+      - VPCAccessPolicy: {}
+      - AWSSecretsManagerRotationPolicy:
+          FunctionName: !Ref FunctionName
+      - Version: 2012-10-17
+        Id: ModifyCacheCluster
+        Statement:
+          Effect: Allow
+          Action:
+          - elasticache:DescribeCacheClusters
+          - elasticache:ModifyCacheCluster
+          Resource: '*'
+      VpcConfig:
+        SubnetIds: !Ref VpcSubnetIds
+        SecurityGroupIds: !Ref VpcSecurityGroupIds
+      Tags:
+        SecretsManagerLambda: Rotation
+  SecretsManagerElastiCacheSecretTargetAttachment:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Completes the final link between a Secrets Manager secret and its associated cache cluster.
+      CodeUri: ./attacher/
+      Handler: attacher.handle
+
+Outputs:
+  RotationLambdaARN:
+    Description: The ARN of the rotation Lambda Function
+    Value: !GetAtt SecretsManagerAuthTokenRotation.Arn
+  AttachmentLambdaARN:
+    Description: The ARN of the attachment Lambda Function, to be used as the service token of a CloudFormation custom resource
+    Value: !GetAtt SecretsManagerElastiCacheSecretTargetAttachment.Arn
