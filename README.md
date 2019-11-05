@@ -50,11 +50,11 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Description: An example auth token.
-      GenerateSecretString:
-        GenerateStringKey: authToken
-        PasswordLength: 64
-        ExcludeCharacters: |-
-          "%'()*+,./:;=?@[\]_`{|}~
+      GenerateSecretString: '{}'
+      GenerateStringKey: authToken
+      PasswordLength: 64
+      ExcludeCharacters: |-
+        "%'()*+,./:;=?@[\]_`{|}~
   ExampleSecretTargetAttachment:
     Type: Custom::TargetAttachment
     Properties:
