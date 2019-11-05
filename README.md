@@ -67,7 +67,7 @@ Resources:
     Properties:
       RotationLambdaARN: !GetAtt ExampleSecretRotator.Outputs.RotationLambdaARN
       RotationRules:
-        AutomaticallyAfterDays: 30
+        AutomaticallyAfterDays: 15
       SecretId: !Ref ExampleSecret
 # snip
 ```
