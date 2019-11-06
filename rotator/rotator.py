@@ -155,7 +155,7 @@ def set_secret(arn, token):
 
   # If we still don't have an access token, complain bitterly
   if not redis_client_id:
-    raise ValueError(f'set_secret: Unable to acquire redis client id with previous, current, or pending secret of secret arn {arn}!')
+    raise ValueError(f'set_secret: Unable to connect to redis with previous, current, or pending secret of secret arn {arn}!')
 
   # Now set the auth token to the pending auth token
   elasticache_client.modify_replication_group(
