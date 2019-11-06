@@ -81,7 +81,7 @@ Resources:
 
 Looking at the sample CloudFormation template above: Absent an intermediary, the resource `ExampleSecret` would need the connection information for the cache, and the resource `ExampleCache` needs the value of the secret. Because the rotator needs the secret to contain information about the cache which needs the value of the secret, we've created a circular dependency -- and one which CloudFormation can't detect, because of the dynamic reference to the secret in the cache.
 
-The Lambda Function exposed at the attribute `AttachmentLambdaARN` is used to create a [CloudFormation custom resource][] which will complete the final link between a Secrets Manager secret and its associated cache. The resource will populate the secret with the required information so that the rotation Lambda Function can function.
+The Lambda Function exposed at the output attribute `AttachmentLambdaARN` is used to create a [CloudFormation custom resource][] which will complete the final link between a Secrets Manager secret and its associated cache. The resource will populate the secret with the required information so that the rotation Lambda Function can function.
 
 [CloudFormation custom resource]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-custom-resources.html
 
