@@ -15,13 +15,52 @@ logger = logging.getLogger()
 helper = CfnResource()
 try:
   secrets_manager_client = boto3.client('secretsmanager', endpoint_url=os.environ['SECRETS_MANAGER_ENDPOINT'])
+  elasticache_client = boto3.client('elasticache')
 except Exception as e:
   helper.init_failure(e)
 
 
 @helper.create
 @helper.update
-def create(event, context):
+def create_update(event, context):
+  """Sets connection information into a specified secret
+
+  This handler completes the final link between the specified Secrets Manager secret and
+  the target ElastiCache Replication Group. It populates the secret with the connection
+  information for the target for later use by a secret rotation Lambda Function.
+
+  After this handler runs, the Secret String will be a JSON string with the following format:
+  {
+    "host": <required, address of ElastiCache replication group>,
+    "port": <required, port of same>,
+    "ssl": <required, transit encryption requirement of same>,
+    "authToken": <required, auth token ("password" in redis terms) of same>
+  }
+
+  Args:
+    event (dict): Lambda dictionary of event parameters. These keys must include the following:
+      - ResourceProperties: The properties specified on the CloudFormation custom resource
+        - SecretId: The unique identifier of the Secrets Manager Secret in which to store connection in formation.
+        - TargetId: The unique identifier of the ElastiCache Replication Group whose connection information to query.
+        - TargetType: The CloudFormation type of the target resource. Must be 'AWS::ElastiCache::ReplicationGroup'.
+
+    context: (LambdaContext): The Lambda runtime information
+
+  Returns:
+    PhysicalResourceId: The unique identifier of the created resource, or None.
+
+  Raises:
+    ResourceNotFoundException: if the secret with the specified ARN does not exist
+
+    ResourceNotFoundException: if the replication group with the specified ID does not exist
+
+    ValueError: if the current secret is not valid JSON
+
+    KeyError: if the secret JSON does not contain the expected keys
+
+    KeyError: if the replication group metadata does not contain the expected keys
+
+  """
   resource_properties = event['ResourceProperties']
   secret_id = resource_properties['SecretId']
   target_id = resource_properties['TargetId']
@@ -33,15 +72,29 @@ def create(event, context):
 
   # Make sure the current secret exists
   current_dict = _get_secret_dict(secret_id, 'AWSCURRENT')
-  logger.info(f'create: Successfully retrieved secret for ARN {secret_id}.')
+  logger.info(f'create_update: Successfully retrieved secret for ARN {secret_id}.')
 
-  # Put back the updated secret
-  current_dict['name'] = target_id
+  # Retrieve connection information
+  # (We have to be sure that the only connection information stored here is that which cannot
+  # by updated without replacement on the Replication Group. Fortunately, they all are.)
+  replication_groups_metadata = elasticache_client.describe_replication_groups(ReplicationGroupId=target_id)
+  # Getting the first (only) element of this collection is safe because we asked for one in particular.
+  replication_group_metadata = replication_groups_metadata['ReplicationGroups'][0]
+  # todo(cosborn) What do we do if there are multiple node groups? What does that even mean?
+  primary_endpoint = replication_group_metadata['NodeGroups'][0].PrimaryEndpoint
+
+  # Update the secret dictionary with connection information (generated authToken already present)
+  current_dict['host'] = primary_endpoint['Address']
+  current_dict['port'] = primary_endpoint['Port']
+  # Transit encryption *must* be enabled to be using auth token, but why not.
+  current_dict['ssl'] = replication_group_metadata['TransitEncryptionEnabled']
+
+  # Put the updated secret back
   secrets_manager_client.put_secret_value(
     SecretId=secret_id,
     SecretString=json.dumps(current_dict),
     VersionStages=['AWSCURRENT'])
-  logger.info(f'create: Successfully put secret for ARN {secret_id}.')
+  logger.info(f'create_update: Successfully put secret for ARN {secret_id}.')
 
 
 def _get_secret_dict(arn, stage, token=None):

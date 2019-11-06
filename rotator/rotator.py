@@ -27,8 +27,10 @@ def handle(event, context):
 
   The Secret SecretString is expected to ba a JSON string with the following format:
   {
-    "name": <required, the unique identifier of the ElastiCache replication group>,
-    "authToken": <required, the ElastiCache auth token>
+    "host": <required, address of ElastiCache replication group>,
+    "port": <required, port of same>,
+    "ssl": <required, transit encryption requirement of same>,
+    "authToken": <required, auth token ("password" in redis terms) of same>
   }
 
   Args:
@@ -234,20 +236,13 @@ def _create_redis_client_id(secret_dict):
   Raises:
     KeyError: If the secret JSON does not contain the expected keys.
 
-    KeyError: If the replication group metadata JSON does not contain the expected keys.
-
   """
-  replication_groups_metadata = elasticache_client.describe_replication_groups(ReplicationGroupId=secret_dict['name'])
-  replication_group_metadata = replication_groups_metadata['ReplicationGroups'][0]
-  primary_endpoint = replication_group_metadata['NodeGroups'][0].PrimaryEndpoint
-  # Transit encryption must be enabled to be using auth token, but why not.
-  transit_encryption_enabled = replication_group_metadata['TransitEncryptionEnabled']
   try:
     redis_client = Redis(
-      host=primary_endpoint['Address'],
-      port=primary_endpoint['Port'],
+      host=secret_dict['host'],
+      port=secret_dict['port'],
       password=secret_dict['authToken'],
-      ssl=transit_encryption_enabled)
+      ssl=secret_dict['ssl'])
     return redis_client.client_id()
   except RedisError:
     return None
