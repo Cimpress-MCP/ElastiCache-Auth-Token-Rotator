@@ -68,6 +68,7 @@ Resources:
       TargetId: !Ref ExampleCache
       TargetType: AWS::ElastiCache::ReplicationGroup
   ExampleSecretRotationSchedule:
+    DependsOn: ExampleSecretTargetAttachment
     Type: AWS::SecretsManager::RotationSchedule
     Properties:
       RotationLambdaARN: !GetAtt ExampleSecretRotator.Outputs.RotationLambdaARN
@@ -84,6 +85,10 @@ Looking at the sample CloudFormation template above: Absent an intermediary, the
 The Lambda Function exposed at the output attribute `AttachmentLambdaARN` is used to create a [CloudFormation custom resource][] which will complete the final link between a Secrets Manager secret and its associated cache. The resource will populate the secret with the required information so that the rotation Lambda Function can function.
 
 [CloudFormation custom resource]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-custom-resources.html
+
+### Why `DependsOn`?
+
+It takes a long time for an ElastiCache Replication Group to be created. This explicit `DependsOn` prevents the rotator from failing continually while the replication group resource is not yet created. It's totally optional, but it should soothe your frazzled DevOps nerves not to see the meaningless invocation failures.
 
 ## Helpful Links
 
