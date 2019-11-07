@@ -166,7 +166,7 @@ def set_secret(arn, token):
     AuthTokenUpdateStrategy='ROTATE',
     ApplyImmediately=True)
   # note(cosborn) Despite 'ApplyImmediately', it does take a hot moment to apply the new auth token.
-  while replication_group_metadata['ReplicationGroup']['PendingModifiedValues'].get('AuthTokenStatus', None) is not None:
+  while 'AuthTokenStatus' in replication_group_metadata['ReplicationGroup']['PendingModifiedValues']:
     time.sleep(5)
     replication_groups_metadata = elasticache_client.describe_replication_groups(ReplicationGroupId=pending_dict['name'])
     replication_group_metadata['ReplicationGroup'] = replication_groups_metadata['ReplicationGroups'][0]
