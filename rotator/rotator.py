@@ -4,6 +4,7 @@ import boto3
 import json
 import logging
 import os
+import time
 from redis import Redis, RedisError
 
 
@@ -25,9 +26,10 @@ def handle(event, context):
   scheme uses the ROTATE auth token update strategy, ensuring that locally cached credentials will continue
   to be accepted for a short period.
 
-  The Secret SecretString is expected to ba a JSON string with the following format:
+  The Secret SecretString is expected to be a JSON string with the following format:
   {
-    "host": <required, address of ElastiCache replication group>,
+    "name": <required, unique identifier of ElastiCache replication group>,
+    "host": <required, address of same>,
     "port": <required, port of same>,
     "ssl": <required, transit encryption requirement of same>,
     "authToken": <required, auth token ("password" in redis terms) of same>
@@ -158,11 +160,16 @@ def set_secret(arn, token):
     raise ValueError(f'set_secret: Unable to connect to redis with previous, current, or pending secret of secret arn {arn}!')
 
   # Now set the auth token to the pending auth token
-  elasticache_client.modify_replication_group(
+  replication_group_metadata = elasticache_client.modify_replication_group(
     ReplicationGroupId=pending_dict['name'],
     AuthToken=pending_dict['authToken'],
     AuthTokenUpdateStrategy='ROTATE',
     ApplyImmediately=True)
+  # note(cosborn) Despite 'ApplyImmediately', it does take a hot moment to apply the new auth token.
+  while replication_group_metadata['ReplicationGroup']['PendingModifiedValues'].get('AuthTokenStatus', None) is not None:
+    time.sleep(5)
+    replication_groups_metadata = elasticache_client.describe_replication_groups(ReplicationGroupId=pending_dict['name'])
+    replication_group_metadata['ReplicationGroup'] = replication_groups_metadata['ReplicationGroups'][0]
 
 
 def test_secret(arn, token):
@@ -238,12 +245,12 @@ def _create_redis_client_id(secret_dict):
 
   """
   try:
-    redis_client = Redis(
+    with Redis(
       host=secret_dict['host'],
       port=secret_dict['port'],
       password=secret_dict['authToken'],
-      ssl=secret_dict['ssl'])
-    return redis_client.client_id()
+      ssl=secret_dict['ssl']) as redis_client:
+      return redis_client.client_id()
   except RedisError:
     return None
 
@@ -269,7 +276,7 @@ def _get_secret_dict(arn, stage, token=None):
     KeyError: If a required field is not found in the secret JSON
 
   """
-  required_fields = ['name', 'authToken']
+  required_fields = ['name', 'host', 'port', 'ssl', 'authToken']
 
   # Only do VersionId validation against the stage if a token is passed in
   if token:

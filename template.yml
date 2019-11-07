@@ -45,7 +45,6 @@ Parameters:
 Globals:
   Function:
     Runtime: python3.7
-    Timeout: 30
     Environment:
       Variables:
         SECRETS_MANAGER_ENDPOINT: !Ref Endpoint
@@ -58,17 +57,18 @@ Resources:
       Description: Conducts an AWS Secrets Manager rotation for ElastiCache Replication Group auth token
       CodeUri: ./rotator/
       Handler: rotator.handle
+      Timeout: 300
       Policies:
       - VPCAccessPolicy: {}
       - AWSSecretsManagerRotationPolicy:
           FunctionName: !Ref FunctionName
       - Version: 2012-10-17
-        Id: ModifyCacheCluster
+        Id: RotateAuthToken
         Statement:
           Effect: Allow
           Action:
-          - elasticache:DescribeCacheClusters
-          - elasticache:ModifyCacheCluster
+          - elasticache:DescribeReplicationGroups
+          - elasticache:ModifyReplicationGroup
           Resource: '*'
       VpcConfig:
         SubnetIds: !Ref VpcSubnetIds
@@ -78,9 +78,25 @@ Resources:
   SecretsManagerElastiCacheSecretTargetAttachment:
     Type: AWS::Serverless::Function
     Properties:
-      Description: Completes the final link between a Secrets Manager secret and its associated cache cluster.
+      Description: Completes the final link between a Secrets Manager secret and its associated cache cluster
       CodeUri: ./attacher/
       Handler: attacher.handle
+      Timeout: 30
+      Policies:
+      - Version: 2012-10-17
+        Id: RetrieveConnectionInformation
+        Statement:
+          Effect: Allow
+          Action: elasticache:DescribeReplicationGroups
+          Resource: '*'
+      - Version: 2012-10-17
+        Id: UpdateSecret
+        Statement:
+          Effect: Allow
+          Action:
+          - secretsmanager:GetSecretValue
+          - secretsmanager:PutSecretValue
+          Resource: '*'
 
 Outputs:
   RotationLambdaARN:
