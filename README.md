@@ -56,7 +56,7 @@ Resources:
       Description: An example replication group connection secret.
       GenerateSecretString:
         SecretStringTemplate: '{}'
-        # The key is named "password" because that it what it's called in Redis.
+        # The key is named "password" because that is what it's called in Redis.
         GenerateStringKey: password
         PasswordLength: 64
         ExcludeCharacters: |-
