@@ -28,11 +28,11 @@ def handle(event, context):
 
   The Secret SecretString is expected to be a JSON string with the following format:
   {
-    "name": <required, unique identifier of ElastiCache replication group>,
+    "id": <required, unique identifier of ElastiCache replication group>,
     "host": <required, address of same>,
     "port": <required, port of same>,
     "ssl": <required, transit encryption requirement of same>,
-    "authToken": <required, auth token ("password" in redis terms) of same>
+    "password": <required, auth token ("password" in redis terms) of same>
   }
 
   Args:
@@ -108,7 +108,7 @@ def create_secret(arn, token):
   except secrets_manager_client.exceptions.ResourceNotFoundException:
     # Generate a random auth token according to length recommendations and allowed character set
     auth_token = secrets_manager_client.get_random_password(PasswordLength=64, ExcludeCharacters=EXCLUDE_CHARACTERS)
-    current_dict['authToken'] = auth_token['RandomPassword']
+    current_dict['password'] = auth_token['RandomPassword']
 
     # Put the secret
     secrets_manager_client.put_secret_value(
@@ -161,14 +161,14 @@ def set_secret(arn, token):
 
   # Now set the auth token to the pending auth token
   replication_group_metadata = elasticache_client.modify_replication_group(
-    ReplicationGroupId=pending_dict['name'],
-    AuthToken=pending_dict['authToken'],
+    ReplicationGroupId=pending_dict['id'],
+    AuthToken=pending_dict['password'],
     AuthTokenUpdateStrategy='ROTATE',
     ApplyImmediately=True)
   # note(cosborn) Despite 'ApplyImmediately', it does take a hot moment to apply the new auth token.
   while 'AuthTokenStatus' in replication_group_metadata['ReplicationGroup']['PendingModifiedValues']:
     time.sleep(5)
-    replication_groups_metadata = elasticache_client.describe_replication_groups(ReplicationGroupId=pending_dict['name'])
+    replication_groups_metadata = elasticache_client.describe_replication_groups(ReplicationGroupId=pending_dict['id'])
     replication_group_metadata['ReplicationGroup'] = replication_groups_metadata['ReplicationGroups'][0]
 
 
@@ -245,11 +245,7 @@ def _create_redis_client_id(secret_dict):
 
   """
   try:
-    with Redis(
-      host=secret_dict['host'],
-      port=secret_dict['port'],
-      password=secret_dict['authToken'],
-      ssl=secret_dict['ssl']) as redis_client:
+    with Redis(**secret_dict) as redis_client:
       return redis_client.client_id()
   except RedisError:
     return None
@@ -276,7 +272,7 @@ def _get_secret_dict(arn, stage, token=None):
     KeyError: If a required field is not found in the secret JSON
 
   """
-  required_fields = ['name', 'host', 'port', 'ssl', 'authToken']
+  required_fields = ['id', 'host', 'port', 'ssl', 'password']
 
   # Only do VersionId validation against the stage if a token is passed in
   if token:

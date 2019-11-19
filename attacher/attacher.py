@@ -31,11 +31,11 @@ def create_update(event, context):
 
   After this handler runs, the Secret String will be a JSON string with the following format:
   {
-    "name": <required, unique identifier of ElastiCache replication group>,
+    "id": <required, unique identifier of ElastiCache replication group>,
     "host": <required, address same>,
     "port": <required, port of same>,
     "ssl": <required, transit encryption requirement of same>,
-    "authToken": <required, auth token ("password" in redis terms) of same>
+    "password": <required, auth token ("password" in redis terms) of same>
   }
 
   Args:
@@ -84,8 +84,8 @@ def create_update(event, context):
   # todo(cosborn) What do we do if there are multiple node groups? What does that even mean?
   primary_endpoint = replication_group_metadata['NodeGroups'][0]['PrimaryEndpoint']
 
-  # Update the secret dictionary with connection information (generated authToken already present)
-  current_dict['name'] = target_id
+  # Update the secret dictionary with connection information (generated password already present)
+  current_dict['id'] = target_id
   current_dict['host'] = primary_endpoint['Address']
   current_dict['port'] = primary_endpoint['Port']
   # Transit encryption *must* be enabled to be using auth token, but why not.
