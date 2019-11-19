@@ -1,8 +1,8 @@
-# Auth Token Rotation
+# ElastiCache AuthToken Rotation
 
 ## What It Is
 
-The Auth Token Rotator is an AWS Secrets Manager [Lambda Function Rotator][] intended to be used with AWS Secrets Manager and AWS ElastiCache. Secrets Manager can use rotators implemented as Lambda Functions to securely and automatically rotate secret configuration values.
+The ElastiCache AuthToken Rotator is an AWS Secrets Manager [Lambda Function Rotator][] intended to be used with AWS Secrets Manager and AWS ElastiCache. Secrets Manager can use rotators implemented as Lambda Functions to securely and automatically rotate secret configuration values.
 
 This rotator can only be used with ElastiCache instances created as Replication Groups (`AWS::ElastiCache::ReplicationGroup`) because those created as plain cache clusters (`AWS::ElastiCache::CacheCluster`) do not support user-specified auth tokens.
 
@@ -27,13 +27,13 @@ Resources:
     Type: AWS::ElastiCache::ReplicationGroup
     Properties:
       # snip
-      TransitEncryptionEnabled: true # Required to be true in order to use AuthToken.
-      AuthToken: !Sub '{{resolve:secretsmanager:${ExampleSecret}::authToken}}'
+      TransitEncryptionEnabled: true # Required to be true in order to use the AuthToken property.
+      AuthToken: !Sub '{{resolve:secretsmanager:${ExampleSecret}::password}}'
   ExampleSecretRotator:
     Type: AWS::Serverless::Application
     Properties:
       Location:
-        ApplicationId: arn:aws:serverlessrepo:us-east-1:820870426321:applications/auth-token-rotator
+        ApplicationId: arn:aws:serverlessrepo:us-east-1:820870426321:applications/elasticache-auth-token-rotator
         SemanticVersion: 1.0.0
       Parameters:
         Endpoint: !Sub https://secretsmanager.${AWS::Region}.${AWS::URLSuffix}
@@ -53,10 +53,11 @@ Resources:
   ExampleSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Description: An example auth token.
+      Description: An example replication group connection secret.
       GenerateSecretString:
         SecretStringTemplate: '{}'
-        GenerateStringKey: authToken
+        # The key is named "password" because that it what it's called in Redis.
+        GenerateStringKey: password
         PasswordLength: 64
         ExcludeCharacters: |-
           "%'()*+,./:;=?@[\]_`{|}~
