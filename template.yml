@@ -3,11 +3,11 @@ AWSTemplateFormatVersion: 2010-09-09
 
 Transform: AWS::Serverless-2016-10-31
 
-Description: An Elasticache auth token rotator for the Cimpress Mass Customization Platform.
+Description: An Elasticache AuthToken rotator.
 
 Metadata:
   AWS::ServerlessRepo::Application:
-    Name: platform-elasticache-rotator
+    Name: elasticache-auth-token-rotator
     Description: >-
       A Secrets Manager rotation Lambda Function which can rotate the auth token for ElastiCache replication groups.
     Author: Christopher Osborn

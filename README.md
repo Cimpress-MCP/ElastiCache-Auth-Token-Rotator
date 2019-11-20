@@ -1,5 +1,10 @@
 # ElastiCache AuthToken Rotation
 
+[![Find it on the Serverless Application Repository][logo]][sam]
+
+[logo]: https://img.shields.io/badge/SAM-Find%20it%20on%20the%20Serverless%20Application%20Repository-brightgreen
+[sam]: https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:820870426321:applications~platform-client-secret-rotator
+
 ## What It Is
 
 The ElastiCache AuthToken Rotator is an AWS Secrets Manager [Lambda Function Rotator][] intended to be used with AWS Secrets Manager and AWS ElastiCache. Secrets Manager can use rotators implemented as Lambda Functions to securely and automatically rotate secret configuration values.
