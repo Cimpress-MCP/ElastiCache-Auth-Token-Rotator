@@ -141,17 +141,17 @@ def set_secret(arn, token):
   """
   # First try to log in with the pending secret. If it succeeds, return
   pending_dict = _get_secret_dict(arn, 'AWSPENDING', token)
-  redis_client_id = _create_redis_client_id(pending_dict)
-  if redis_client_id:
+  pong = _ping_redis(pending_dict)
+  if pong:
     logger.info(f'set_secret: AWSPENDING secret is already set as auth token for secret {arn}.')
     return
 
   # Now try the current secret
-  redis_client_id = _create_redis_client_id(_get_secret_dict(arn, 'AWSCURRENT'))
-  if not redis_client_id:
+  pong = _ping_redis(_get_secret_dict(arn, 'AWSCURRENT'))
+  if not pong:
     # If both current and pending do not work, try previous
     try:
-      redis_client_id = _create_redis_client_id(_get_secret_dict(arn, 'AWSPREVIOUS'))
+      redis_client_id = _ping_redis(_get_secret_dict(arn, 'AWSPREVIOUS'))
     except secrets_manager_client.exceptions.ResourceNotFoundException:
       redis_client_id = None
 
@@ -191,7 +191,7 @@ def test_secret(arn, token):
 
   """
   # Try to acquire an acccess token with the pending secret
-  redis_client_id = _create_redis_client_id(_get_secret_dict(arn, 'AWSPENDING', token))
+  redis_client_id = _ping_redis(_get_secret_dict(arn, 'AWSPENDING', token))
   if not redis_client_id:
     raise ValueError(f'test_secret: Unable to acquire redis client id with pending secret of secret ARN {arn}.')
 
@@ -228,17 +228,17 @@ def finish_secret(arn, token):
   logger.info(f'finish_secret: Successfully set AWSCURRENT stage to version {token} for secret {arn}.')
 
 
-def _create_redis_client_id(secret_dict):
-  """Creates a redis client ID from a secret dictionary
+def _ping_redis(secret_dict):
+  """Pings redis from a secret dictionary
 
   This helper function tries to create an active redis client, grabbing credential info
-  from the secret dictionary. If successful, it returns the redis client ID, otherwise None.
+  from the secret dictionary. If successful, it returns "PONG", otherwise None.
 
   Args:
     secret_dict (dict): The secret dictionary
 
   Returns:
-    int: The active redis client ID or None
+    string: "PONG" or None
 
   Raises:
     KeyError: If the secret JSON does not contain the expected keys.
@@ -246,7 +246,7 @@ def _create_redis_client_id(secret_dict):
   """
   try:
     with Redis(**secret_dict) as redis_client:
-      return redis_client.client_id()
+      return redis_client.ping()
   except RedisError:
     return None
 

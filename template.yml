@@ -25,7 +25,7 @@ Metadata:
     - rotator
     - auth-token
     HomePageUrl: https://github.com/Cimpress-MCP/Platform-ElastiCache-Rotator
-    SemanticVersion: 0.0.1
+    SemanticVersion: 1.0.0
     SourceCodeUrl: https://github.com/Cimpress-MCP/Platform-ElastiCache-Rotator
 
 Parameters:
@@ -44,7 +44,7 @@ Parameters:
 
 Globals:
   Function:
-    Runtime: python3.7
+    Runtime: python3.8
     Environment:
       Variables:
         SECRETS_MANAGER_ENDPOINT: !Ref Endpoint
