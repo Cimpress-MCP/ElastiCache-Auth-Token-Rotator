@@ -24,9 +24,9 @@ Metadata:
     - rotation
     - rotator
     - auth-token
-    HomePageUrl: https://github.com/Cimpress-MCP/Platform-ElastiCache-Rotator
+    HomePageUrl: https://github.com/Cimpress-MCP/ElastiCache-Auth-Token-Rotator
     SemanticVersion: 1.0.0
-    SourceCodeUrl: https://github.com/Cimpress-MCP/Platform-ElastiCache-Rotator
+    SourceCodeUrl: https://github.com/Cimpress-MCP/ElastiCache-Auth-Token-Rotator
 
 Parameters:
   Endpoint:
