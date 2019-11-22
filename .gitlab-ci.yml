@@ -1,0 +1,54 @@
+image: lambci/lambda:build-python3.8
+
+stages:
+- test
+- build
+- package
+- publish
+
+variables:
+  AWS_DEFAULT_OUTPUT: text
+  SAM_CLI_TELEMETRY: 0
+  SERVICE_NAME: elasticache-auth-token-rotator
+
+cache:
+  key: "$CI_PIPELINE_ID"
+
+test:
+  stage: test
+  before_script:
+  - pip install cfn-lint
+  script:
+  - sam validate
+  - cfn-lint --template ./template.yml
+
+build:
+  stage: build
+  script:
+  - sam build
+  artifacts:
+    paths:
+    - ./.aws-sam/
+
+package:
+  stage: package
+  before_script:
+  - export BUCKET="$(aws cloudformation list-exports --query "Exports[?Name=='DeploymentBucket'].Value")"
+  script:
+  - sam package
+    --s3-bucket "${BUCKET}"
+    --s3-prefix "${SERVICE_NAME}"
+    --output-template-file ./template.out.yml
+  artifacts:
+    paths:
+    - ./template.out.yml
+  only:
+  - master
+
+publish:
+  stage: publish
+  script:
+  # Public SAR deployments must go to us-east-1.
+  - sam publish --region us-east-1 --template ./template.out.yml
+  only:
+  - master
