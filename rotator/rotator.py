@@ -5,7 +5,8 @@ import json
 import logging
 import os
 import time
-from redis import Redis, RedisError
+from redis import RedisError
+from rediscluster import RedisCluster
 
 
 # Auth tokens:
@@ -28,11 +29,13 @@ def handle(event, context):
 
   The Secret SecretString is expected to be a JSON string with the following format:
   {
-    "id": <required, unique identifier of ElastiCache replication group>,
-    "host": <required, address of same>,
-    "port": <required, port of same>,
+    "_metadata": {
+      "id": <string, required, unique identifier of ElastiCache replication group>,
+    },
+    "": [ <host>:<port> ],
     "ssl": <required, transit encryption requirement of same>,
     "password": <required, auth token ("password" in redis terms) of same>
+    …the remainder of the properties
   }
 
   Args:
@@ -159,16 +162,17 @@ def set_secret(arn, token):
   if not redis_client_id:
     raise ValueError(f'set_secret: Unable to connect to redis with previous, current, or pending secret of secret arn {arn}!')
 
+  replication_group_id = pending_dict['_metadata']['id']
   # Now set the auth token to the pending auth token
   replication_group_metadata = elasticache_client.modify_replication_group(
-    ReplicationGroupId=pending_dict['id'],
+    ReplicationGroupId=replication_group_id,
     AuthToken=pending_dict['password'],
     AuthTokenUpdateStrategy='ROTATE',
     ApplyImmediately=True)
   # note(cosborn) Despite 'ApplyImmediately', it does take a hot moment to apply the new auth token.
   while 'AuthTokenStatus' in replication_group_metadata['ReplicationGroup']['PendingModifiedValues']:
     time.sleep(5)
-    replication_groups_metadata = elasticache_client.describe_replication_groups(ReplicationGroupId=pending_dict['id'])
+    replication_groups_metadata = elasticache_client.describe_replication_groups(ReplicationGroupId=replication_group_id)
     replication_group_metadata['ReplicationGroup'] = replication_groups_metadata['ReplicationGroups'][0]
 
 
@@ -190,10 +194,9 @@ def test_secret(arn, token):
       KeyError: If the secret json does not contain the expected keys
 
   """
-  # Try to acquire an acccess token with the pending secret
-  redis_client_id = _ping_redis(_get_secret_dict(arn, 'AWSPENDING', token))
-  if not redis_client_id:
-    raise ValueError(f'test_secret: Unable to acquire redis client id with pending secret of secret ARN {arn}.')
+  pong = _ping_redis(_get_secret_dict(arn, 'AWSPENDING', token))
+  if not pong:
+    raise ValueError(f'test_secret: Unable to ping redis with pending secret of secret ARN {arn}.')
 
 
 def finish_secret(arn, token):
@@ -211,13 +214,13 @@ def finish_secret(arn, token):
   metadata = secrets_manager_client.describe_secret(SecretId=arn)
   current_version = None
   for version in metadata['VersionIdsToStages']:
-      if 'AWSCURRENT' in metadata['VersionIdsToStages'][version]:
-          if version == token:
-            # The correct version is already marked as current, return
-            logger.info(f'finishSecret: Version {version} already marked as AWSCURRENT for {arn}.')
-            return
-          current_version = version
-          break
+    if 'AWSCURRENT' in metadata['VersionIdsToStages'][version]:
+      if version == token:
+        # The correct version is already marked as current, return
+        logger.info(f'finishSecret: Version {version} already marked as AWSCURRENT for {arn}.')
+        return
+      current_version = version
+      break
 
   # Finalize by staging the secret version current
   secrets_manager_client.update_secret_version_stage(
@@ -238,16 +241,21 @@ def _ping_redis(secret_dict):
     secret_dict (dict): The secret dictionary
 
   Returns:
-    string: "PONG" or None
+    string: "PONG" or None (a glorified Bool, really)
 
   Raises:
     KeyError: If the secret JSON does not contain the expected keys.
 
   """
+  def create_node(end_point):
+    host, port = end_point.split(':', maxsplit=2)
+    return { 'host': host, 'port': int(port) }
+
+  startup_nodes = [create_node(end_point) for end_point in secret_dict['_endPoints']]
   try:
-    with Redis(**secret_dict) as redis_client:
+    with RedisCluster(startup_nodes=startup_nodes, **secret_dict) as redis_client:
       return redis_client.ping()
-  except RedisError:
+  except RedisError as _:
     return None
 
 
@@ -272,15 +280,14 @@ def _get_secret_dict(arn, stage, token=None):
     KeyError: If a required field is not found in the secret JSON
 
   """
-  required_fields = ['id', 'host', 'port', 'ssl', 'password']
+  required_fields = ['_metadata', '', 'ssl', 'password']
 
   # Only do VersionId validation against the stage if a token is passed in
   if token:
     secret = secrets_manager_client.get_secret_value(SecretId=arn, VersionId=token, VersionStage=stage)
   else:
     secret = secrets_manager_client.get_secret_value(SecretId=arn, VersionStage=stage)
-  plaintext = secret['SecretString']
-  secret_dict = json.loads(plaintext)
+  secret_dict = json.loads(secret['SecretString'])
 
   # Run validations against the secret
   for field in required_fields:

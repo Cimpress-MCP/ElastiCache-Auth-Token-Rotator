@@ -12,6 +12,8 @@ RESOURCE_TYPE = 'AWS::ElastiCache::ReplicationGroup'
 
 # Set up the dependencies
 logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
 helper = CfnResource()
 try:
   secrets_manager_client = boto3.client('secretsmanager', endpoint_url=os.environ['SECRETS_MANAGER_ENDPOINT'])
@@ -31,11 +33,13 @@ def create_update(event, context):
 
   After this handler runs, the Secret String will be a JSON string with the following format:
   {
-    "id": <required, unique identifier of ElastiCache replication group>,
-    "host": <required, address same>,
-    "port": <required, port of same>,
+    "_metadata": {
+      "id": <string, required, unique identifier of ElastiCache replication group>,
+    },
+    "": [ <host>:<port> ],
     "ssl": <required, transit encryption requirement of same>,
     "password": <required, auth token ("password" in redis terms) of same>
+    …the remainder of the properties
   }
 
   Args:
@@ -72,22 +76,20 @@ def create_update(event, context):
     raise ValueError(f'The specified target type is invalid, it must be "{RESOURCE_TYPE}".')
 
   # Make sure the current secret exists
-  current_dict = _get_secret_dict(secret_id, 'AWSCURRENT')
+  current_dict = _get_secret_dict(secrets_manager_client, secret_id, 'AWSCURRENT')
   logger.info(f'create_update: Successfully retrieved secret for ARN {secret_id}.')
 
   # Retrieve connection information
   # (We have to be sure that the only connection information stored here is that which cannot
-  # by updated without replacement on the Replication Group. Fortunately, they all are.)
+  # be updated without replacement on the Replication Group. Fortunately, they all are.)
   replication_groups_metadata = elasticache_client.describe_replication_groups(ReplicationGroupId=target_id)
   # Getting the first (only) element of this collection is safe because we asked for one in particular.
   replication_group_metadata = replication_groups_metadata['ReplicationGroups'][0]
-  # todo(cosborn) What do we do if there are multiple node groups? What does that even mean?
-  primary_endpoint = replication_group_metadata['NodeGroups'][0]['PrimaryEndpoint']
+  end_points = [ node_group['PrimaryEndpoint'] for node_group in replication_group_metadata['NodeGroups'] ]
 
   # Update the secret dictionary with connection information (generated password already present)
-  current_dict['id'] = target_id
-  current_dict['host'] = primary_endpoint['Address']
-  current_dict['port'] = primary_endpoint['Port']
+  current_dict['_metadata'] = { 'id': target_id }
+  current_dict[''] = [ f"{end_point['Address']}:{end_point['Port']}" for end_point in end_points ]
   # Transit encryption *must* be enabled to be using auth token, but why not.
   current_dict['ssl'] = replication_group_metadata['TransitEncryptionEnabled']
 

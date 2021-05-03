@@ -9,7 +9,9 @@ Metadata:
   AWS::ServerlessRepo::Application:
     Name: elasticache-auth-token-rotator
     Description: >-
-      A Secrets Manager rotation Lambda Function which can rotate the auth token for ElastiCache replication groups.
+      A Secrets Manager rotation Lambda Function which can rotate the auth token
+      for ElastiCache replication groups, along with a secret target attachement
+      Lambda Function for use as a CloudFormation custom resource.
     Author: Christopher Osborn
     SpdxLicenseId: Apache-2.0
     LicenseUrl: ./LICENSE
@@ -25,7 +27,7 @@ Metadata:
     - rotator
     - auth-token
     HomePageUrl: https://github.com/Cimpress-MCP/ElastiCache-Auth-Token-Rotator
-    SemanticVersion: 1.0.0
+    SemanticVersion: 2.0.0
     SourceCodeUrl: https://github.com/Cimpress-MCP/ElastiCache-Auth-Token-Rotator
 
 Parameters:
@@ -35,12 +37,23 @@ Parameters:
   FunctionName:
     Type: String
     Description: The name of the Lambda Function.
+  InvokingServicePrincipal:
+    Type: String
+    Description: The service principal of the invoking service.
+    Default: secretsmanager.amazonaws.com
+  KmsKeyArn:
+    Type: String
+    Description: The KMS key used to encrypt the secret being rotated.
+    Default: ''
   VpcSubnetIds:
     Type: CommaDelimitedList
     Description: A list of VPC subnet IDs.
   VpcSecurityGroupIds:
     Type: CommaDelimitedList
     Description: A list of VPC security group IDs.
+
+Conditions:
+  KmsKeyArnExists: !Not [ !Equals [ '', !Ref KmsKeyArn ] ]
 
 Globals:
   Function:
@@ -50,6 +63,29 @@ Globals:
         SECRETS_MANAGER_ENDPOINT: !Ref Endpoint
 
 Resources:
+  SecretDecryptionPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: KmsKeyArnExists
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action: kms:DescribeKey
+          Resource: !Ref KmsKeyArn
+          Condition:
+            StringEquals:
+              kms:ViaService: !Sub secretsmanager.${AWS::Region}.${AWS::URLSuffix}
+        - Effect: Allow
+          Action:
+          - kms:Decrypt
+          - kms:GenerateDataKey*
+          Resource: !Ref KmsKeyArn
+          Condition:
+            StringEquals:
+              kms:ViaService: !Sub secretsmanager.${AWS::Region}.${AWS::URLSuffix}
+            ForAnyValue:ArnLike:
+              kms:EncryptionContext:SecretARN: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*
   SecretsManagerAuthTokenRotation:
     Type: AWS::Serverless::Function
     Properties:
@@ -69,12 +105,19 @@ Resources:
           Action:
           - elasticache:DescribeReplicationGroups
           - elasticache:ModifyReplicationGroup
-          Resource: '*'
+          Resource: !Sub arn:${AWS::Partition}:elasticache:${AWS::Region}:${AWS::AccountId}:replicationgroup:*
+      - !If [ KmsKeyArnExists, !Ref SecretDecryptionPolicy, !Ref AWS::NoValue ]
       VpcConfig:
         SubnetIds: !Ref VpcSubnetIds
         SecurityGroupIds: !Ref VpcSecurityGroupIds
       Tags:
         SecretsManagerLambda: Rotation
+  SecretsManagerAuthTokenRotationPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt SecretsManagerAuthTokenRotation.Arn
+      Principal: !Ref InvokingServicePrincipal
   SecretsManagerElastiCacheSecretTargetAttachment:
     Type: AWS::Serverless::Function
     Properties:
@@ -86,17 +129,18 @@ Resources:
       - Version: 2012-10-17
         Id: RetrieveConnectionInformation
         Statement:
-          Effect: Allow
+        - Effect: Allow
           Action: elasticache:DescribeReplicationGroups
-          Resource: '*'
-      - Version: 2012-10-17
-        Id: UpdateSecret
-        Statement:
-          Effect: Allow
+          Resource: !Sub arn:${AWS::Partition}:elasticache:${AWS::Region}:${AWS::AccountId}:replicationgroup:*
+        - Effect: Allow
           Action:
           - secretsmanager:GetSecretValue
           - secretsmanager:PutSecretValue
-          Resource: '*'
+          Resource: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*
+          Condition:
+            ForAnyValue:StringEquals:
+              secretsmanager:VersionStage: AWSCURRENT
+      - !If [ KmsKeyArnExists, !Ref SecretDecryptionPolicy, !Ref AWS::NoValue ]
 
 Outputs:
   RotationLambdaARN:
