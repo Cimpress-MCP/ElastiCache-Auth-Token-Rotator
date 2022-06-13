@@ -39,29 +39,21 @@ Resources:
     Properties:
       Location:
         ApplicationId: arn:aws:serverlessrepo:us-east-1:820870426321:applications/elasticache-auth-token-rotator
-        SemanticVersion: 1.0.0
+        SemanticVersion: 2.0.0
       Parameters:
         Endpoint: !Sub https://secretsmanager.${AWS::Region}.${AWS::URLSuffix}
         FunctionName: secret-rotator
+        KmsKeyArn: !GetAtt ExampleKey.Arn
         VpcSecurityGroupIds: !Ref SecurityGroup
         VpcSubnetIds: !Join
         - ','
-        - - !Ref Subnet1
-          - !Ref Subnet2
-          - !Ref Subnet3
-  ExampleSecretRotatorInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt ExampleSecretRotator.Outputs.RotationLambdaARN
-      Action: lambda:InvokeFunction
-      Principal: !Sub secretsmanager.${AWS::URLSuffix}
+        - [ !Ref Subnet1, !Ref Subnet2, !Ref Subnet3 ]
   ExampleSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
       Description: An example replication group connection secret.
       GenerateSecretString:
         SecretStringTemplate: '{}'
-        # The key is named "password" because that is what it's called in Redis.
         GenerateStringKey: password
         PasswordLength: 64
         ExcludeCharacters: |-
