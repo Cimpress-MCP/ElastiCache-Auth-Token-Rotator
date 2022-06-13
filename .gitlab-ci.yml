@@ -8,6 +8,8 @@ stages:
 
 variables:
   AWS_DEFAULT_OUTPUT: text
+  AWS_DEFAULT_REGION: eu-west-1
+  AWS_REGION: eu-west-1
   SAM_CLI_TELEMETRY: 0
   SERVICE_NAME: elasticache-auth-token-rotator
 
