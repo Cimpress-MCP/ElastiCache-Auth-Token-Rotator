@@ -27,7 +27,7 @@ Metadata:
     - rotator
     - auth-token
     HomePageUrl: https://github.com/Cimpress-MCP/ElastiCache-Auth-Token-Rotator
-    SemanticVersion: 2.0.0
+    SemanticVersion: 2.0.1
     SourceCodeUrl: https://github.com/Cimpress-MCP/ElastiCache-Auth-Token-Rotator
 
 Parameters:
@@ -118,6 +118,15 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !GetAtt SecretsManagerAuthTokenRotation.Arn
       Principal: !Ref InvokingServicePrincipal
+  SecretsManagerAuthTokenLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+      - python3.8
+      ContentUri: ./layer
+      Description: A vendored layer for AuthToken rotation.
+    Metadata:
+      BuildMethod: python3.8
   SecretsManagerElastiCacheSecretTargetAttachment:
     Type: AWS::Serverless::Function
     Properties:
@@ -125,6 +134,8 @@ Resources:
       CodeUri: ./attacher/
       Handler: attacher.handle
       Timeout: 30
+      Layers:
+      - !Ref SecretsManagerAuthTokenLayer
       Policies:
       - Version: 2012-10-17
         Id: RetrieveConnectionInformation
