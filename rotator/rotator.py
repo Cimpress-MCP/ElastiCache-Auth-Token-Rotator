@@ -5,8 +5,7 @@ import json
 import logging
 import os
 import time
-from redis import RedisError
-from rediscluster import RedisCluster
+from redis import Redis, RedisError
 
 
 # Auth tokens:
@@ -241,22 +240,21 @@ def _ping_redis(secret_dict):
     secret_dict (dict): The secret dictionary
 
   Returns:
-    string: "PONG" or None (a glorified Bool, really)
+    bool: The response to ping.
 
   Raises:
     KeyError: If the secret JSON does not contain the expected keys.
 
   """
-  def create_node(end_point):
-    host, port = end_point.split(':', maxsplit=2)
-    return { 'host': host, 'port': int(port) }
+  def ping(conn):
+    host, port = conn.split(':', maxsplit=2)
+    try:
+      with Redis(host=host, port=port, **secret_dict) as redis_client:
+        return redis_client.ping()
+    except RedisError as _:
+      return False
 
-  startup_nodes = [create_node(end_point) for end_point in secret_dict['']]
-  try:
-    with RedisCluster(startup_nodes=startup_nodes, **secret_dict) as redis_client:
-      return redis_client.ping()
-  except RedisError as _:
-    return None
+  return all([ping(conn) for conn in secret_dict['']])
 
 
 def _get_secret_dict(arn, stage, token=None):
