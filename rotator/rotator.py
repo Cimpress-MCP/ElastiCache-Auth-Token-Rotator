@@ -251,7 +251,7 @@ def _ping_redis(secret_dict):
     host, port = end_point.split(':', maxsplit=2)
     return { 'host': host, 'port': int(port) }
 
-  startup_nodes = [create_node(end_point) for end_point in secret_dict['_endPoints']]
+  startup_nodes = [create_node(end_point) for end_point in secret_dict['']]
   try:
     with RedisCluster(startup_nodes=startup_nodes, **secret_dict) as redis_client:
       return redis_client.ping()
