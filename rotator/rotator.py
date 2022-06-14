@@ -249,7 +249,7 @@ def _ping_redis(secret_dict):
   def ping(conn):
     host, port = conn.split(':', maxsplit=2)
     try:
-      with Redis(host=host, port=port, **secret_dict) as redis_client:
+      with Redis(host=host, port=port, ssl=secret_dict['ssl'], password=secret_dict['password']) as redis_client:
         return redis_client.ping()
     except RedisError as _:
       return False
