@@ -39,7 +39,7 @@ Resources:
     Properties:
       Location:
         ApplicationId: arn:aws:serverlessrepo:us-east-1:820870426321:applications/elasticache-auth-token-rotator
-        SemanticVersion: 2.0.7
+        SemanticVersion: 2.0.8
       Parameters:
         Endpoint: !Sub https://secretsmanager.${AWS::Region}.${AWS::URLSuffix}
         FunctionName: secret-rotator
