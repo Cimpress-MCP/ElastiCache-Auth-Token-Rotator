@@ -76,7 +76,7 @@ def create_update(event, context):
     raise ValueError(f'The specified target type is invalid, it must be "{RESOURCE_TYPE}".')
 
   # Make sure the current secret exists
-  current_dict = _get_secret_dict(secrets_manager_client, secret_id, 'AWSCURRENT')
+  current_dict = _get_secret_dict(secret_id, 'AWSCURRENT')
   logger.info(f'create_update: Successfully retrieved secret for ARN {secret_id}.')
 
   # Retrieve connection information
