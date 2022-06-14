@@ -153,12 +153,12 @@ def set_secret(arn, token):
   if not pong:
     # If both current and pending do not work, try previous
     try:
-      redis_client_id = _ping_redis(_get_secret_dict(arn, 'AWSPREVIOUS'))
+      pong = _ping_redis(_get_secret_dict(arn, 'AWSPREVIOUS'))
     except secrets_manager_client.exceptions.ResourceNotFoundException:
-      redis_client_id = None
+      pong = False
 
   # If we still don't have an access token, complain bitterly
-  if not redis_client_id:
+  if not pong:
     raise ValueError(f'set_secret: Unable to connect to redis with previous, current, or pending secret of secret arn {arn}!')
 
   replication_group_id = pending_dict['_metadata']['id']
