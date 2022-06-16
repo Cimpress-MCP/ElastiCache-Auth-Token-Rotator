@@ -1,4 +1,4 @@
-image: public.ecr.aws/sam/build-python3.8:latest-x86_64
+image: public.ecr.aws/sam/build-python3.9:latest-x86_64
 
 stages:
 - test
@@ -19,7 +19,7 @@ cache:
 test:
   stage: test
   before_script:
-  - pip install cfn-lint
+  - pip install --quiet cfn-lint
   script:
   - sam validate
   - cfn-lint --template ./template.yml
