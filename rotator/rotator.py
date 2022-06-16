@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import boto3
+import inspect
 import json
 import logging
 import os
@@ -246,15 +247,17 @@ def _ping_redis(secret_dict):
     KeyError: If the secret JSON does not contain the expected keys.
 
   """
-  def ping(conn):
+  def ping(conn, conn_args):
     host, port = conn.split(':', maxsplit=2)
     try:
-      with Redis(host=host, port=port, ssl=secret_dict['ssl'], password=secret_dict['password']) as redis_client:
+      with Redis(host=host, port=port, **conn_args) as redis_client:
         return redis_client.ping()
     except RedisError as _:
       return False
 
-  return all([ping(conn) for conn in secret_dict['']])
+  signature_keys = inspect.signature(Redis.__init__).parameters.keys()
+  conn_args = { key: secret_dict[key] for key in secret_dict if key in signature_keys }
+  return all([ping(conn, conn_args) for conn in secret_dict['']])
 
 
 def _get_secret_dict(arn, stage, token=None):

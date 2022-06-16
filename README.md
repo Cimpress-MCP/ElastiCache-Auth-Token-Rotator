@@ -39,11 +39,12 @@ Resources:
     Properties:
       Location:
         ApplicationId: arn:aws:serverlessrepo:us-east-1:820870426321:applications/elasticache-auth-token-rotator
-        SemanticVersion: 2.0.8
+        SemanticVersion: 3.0.0
       Parameters:
-        Endpoint: !Sub https://secretsmanager.${AWS::Region}.${AWS::URLSuffix}
         FunctionName: secret-rotator
         KmsKeyArn: !GetAtt ExampleKey.Arn
+        ReplicationGroupId: !Ref ReplicationGroup
+        SecretId: !Ref ExampleSecret
         VpcSecurityGroupIds: !Ref SecurityGroup
         VpcSubnetIds: !Join
         - ','
@@ -58,15 +59,7 @@ Resources:
         PasswordLength: 64
         ExcludeCharacters: |-
           "%'()*+,./:;=?@[\]_`{|}~
-  ExampleSecretTargetAttachment:
-    Type: Custom::TargetAttachment
-    Properties:
-      ServiceToken: !GetAtt ExampleSecretRotator.Outputs.AttachmentLambdaARN
-      SecretId: !Ref ExampleSecret
-      TargetId: !Ref ExampleCache
-      TargetType: AWS::ElastiCache::ReplicationGroup
   ExampleSecretRotationSchedule:
-    DependsOn: ExampleSecretTargetAttachment
     Type: AWS::SecretsManager::RotationSchedule
     Properties:
       RotationLambdaARN: !GetAtt ExampleSecretRotator.Outputs.RotationLambdaARN
@@ -76,17 +69,7 @@ Resources:
 # snip
 ```
 
-### Huh? What's a "TargetAttachment"?
-
-Looking at the sample CloudFormation template above: Absent an intermediary, the resource `ExampleSecret` would need the connection information for the cache, and the resource `ExampleCache` needs the value of the secret. Because the rotator needs the secret to contain information about the cache which needs the value of the secret, we've created a circular dependency -- and one which CloudFormation can't detect, because of the dynamic reference to the secret in the cache.
-
-The Lambda Function exposed at the output attribute `AttachmentLambdaARN` is used to create a [CloudFormation custom resource][] which will complete the final link between a Secrets Manager secret and its associated cache. The resource will populate the secret with the required information so that the rotation Lambda Function can function.
-
-[CloudFormation custom resource]: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-custom-resources.html
-
-### Why `DependsOn`?
-
-It takes a long time for an ElastiCache Replication Group to be created. This explicit `DependsOn` prevents the rotator from failing continually while the replication group resource is not yet created. It's totally optional, but it should soothe your frazzled DevOps nerves not to see the meaningless invocation failures.
+Further resources (such as security groups) are created in the standard way.
 
 ## Helpful Links
 
