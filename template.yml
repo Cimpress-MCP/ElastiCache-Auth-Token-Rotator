@@ -27,24 +27,31 @@ Metadata:
     - rotator
     - auth-token
     HomePageUrl: https://github.com/Cimpress-MCP/ElastiCache-Auth-Token-Rotator
-    SemanticVersion: 2.0.8
+    SemanticVersion: 3.0.0
     SourceCodeUrl: https://github.com/Cimpress-MCP/ElastiCache-Auth-Token-Rotator
 
 Parameters:
   Endpoint:
-    Type: String
-    Description: The Secrets Manager endpoint to hit.
-  FunctionName:
-    Type: String
-    Description: The name of the Lambda Function.
-  InvokingServicePrincipal:
-    Type: String
-    Description: The service principal of the invoking service.
-    Default: secretsmanager.amazonaws.com
-  KmsKeyArn:
-    Type: String
-    Description: The KMS key used to encrypt the secret being rotated.
     Default: ''
+    Description: The Secrets Manager endpoint to hit.
+    Type: String
+  FunctionName:
+    Description: The name of the Lambda Function.
+    Type: String
+  InvokingServicePrincipal:
+    Default: ''
+    Description: The service principal of the invoking service.
+    Type: String
+  KmsKeyArn:
+    Default: ''
+    Description: The KMS key used to encrypt the secret being rotated.
+    Type: String
+  ReplicationGroupId:
+    Description: The name of the replication group whose password will be rotated.
+    Type: String
+  SecretId:
+    Description: The secret which stores the replication group password.
+    Type: String
   VpcSubnetIds:
     Type: CommaDelimitedList
     Description: A list of VPC subnet IDs.
@@ -53,14 +60,23 @@ Parameters:
     Description: A list of VPC security group IDs.
 
 Conditions:
+  EndpointExists: !Not [ !Equals [ '', !Ref Endpoint ] ]
+  InvokingServicePrincipalExists: !Not [ !Equals [ '', !Ref InvokingServicePrincipal ] ]
   KmsKeyArnExists: !Not [ !Equals [ '', !Ref KmsKeyArn ] ]
 
 Globals:
   Function:
-    Runtime: python3.8
+    Runtime: python3.9
+    KmsKeyArn: !If
+    - KmsKeyArnExists
+    - !Ref KmsKeyArn
+    - !Ref AWS::NoValue
     Environment:
       Variables:
-        SECRETS_MANAGER_ENDPOINT: !Ref Endpoint
+        SECRETS_MANAGER_ENDPOINT: !If
+        - EndpointExists
+        - !Ref Endpoint
+        - !Sub https://secretsmanager.${AWS::Region}.${AWS::URLSuffix}
 
 Resources:
   SecretDecryptionPolicy:
@@ -85,7 +101,7 @@ Resources:
             StringEquals:
               kms:ViaService: !Sub secretsmanager.${AWS::Region}.${AWS::URLSuffix}
             ArnLike:
-              kms:EncryptionContext:SecretARN: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*
+              kms:EncryptionContext:SecretARN: !Ref SecretId
   SecretsManagerAuthTokenRotation:
     Type: AWS::Serverless::Function
     Properties:
@@ -106,7 +122,7 @@ Resources:
           Action:
           - elasticache:DescribeReplicationGroups
           - elasticache:ModifyReplicationGroup
-          Resource: !Sub arn:${AWS::Partition}:elasticache:${AWS::Region}:${AWS::AccountId}:replicationgroup:*
+          Resource: !Sub arn:${AWS::Partition}:elasticache:${AWS::Region}:${AWS::AccountId}:replicationgroup:${ReplicationGroupId}
       - !If [ KmsKeyArnExists, !Ref SecretDecryptionPolicy, !Ref AWS::NoValue ]
       VpcConfig:
         SubnetIds: !Ref VpcSubnetIds
@@ -118,16 +134,19 @@ Resources:
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !GetAtt SecretsManagerAuthTokenRotation.Arn
-      Principal: !Ref InvokingServicePrincipal
+      Principal: !If
+      - InvokingServicePrincipalExists
+      - !Ref InvokingServicePrincipal
+      - !Sub secretsmanager.${AWS::URLSuffix}
   SecretsManagerAuthTokenLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
       CompatibleRuntimes:
-      - python3.8
+      - python3.9
       ContentUri: ./layer
       Description: A vendored layer for AuthToken rotation.
     Metadata:
-      BuildMethod: python3.8
+      BuildMethod: python3.9
   SecretsManagerElastiCacheSecretTargetAttachment:
     Type: AWS::Serverless::Function
     Properties:
@@ -143,22 +162,26 @@ Resources:
         Statement:
         - Effect: Allow
           Action: elasticache:DescribeReplicationGroups
-          Resource: !Sub arn:${AWS::Partition}:elasticache:${AWS::Region}:${AWS::AccountId}:replicationgroup:*
+          Resource: !Sub arn:${AWS::Partition}:elasticache:${AWS::Region}:${AWS::AccountId}:replicationgroup:${ReplicationGroupId}
         - Effect: Allow
           Action: secretsmanager:GetSecretValue
-          Resource: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*
+          Resource: !Ref SecretId
           Condition:
             ForAnyValue:StringEquals:
               secretsmanager:VersionStage: AWSCURRENT
         - Effect: Allow
           Action: secretsmanager:PutSecretValue
-          Resource: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*
+          Resource: !Ref SecretId
       - !If [ KmsKeyArnExists, !Ref SecretDecryptionPolicy, !Ref AWS::NoValue ]
+  SecretsManagerElastiCacheSecretTargetAttachmentRotator:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt SecretsManagerElastiCacheSecretTargetAttachment.Arn
+      SecretId: !Ref SecretId
+      TargetId: !Ref ReplicationGroupId
+      TargetType: AWS::ElastiCache::ReplicationGroup
 
 Outputs:
   RotationLambdaARN:
     Description: The ARN of the rotation Lambda Function
     Value: !GetAtt SecretsManagerAuthTokenRotation.Arn
-  AttachmentLambdaARN:
-    Description: The ARN of the attachment Lambda Function, to be used as the service token of a CloudFormation custom resource
-    Value: !GetAtt SecretsManagerElastiCacheSecretTargetAttachment.Arn
